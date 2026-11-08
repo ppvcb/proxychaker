@@ -1,0 +1,7 @@
+# Runtime data (auto-created, not committed)
+data/api_key.txt
+data/proxies.json
+__pycache__/
+*.pyc
+*.pyo
+.env
