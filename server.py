@@ -425,11 +425,240 @@ def _save_data(data):
 
 
 # ---------------------------------------------------------------
-# Control panel
+# Control panel  (HTML embedded for self-contained Docker builds;
+# if static/index.html exists on disk it takes priority so you can
+# still edit the file locally during development)
 # ---------------------------------------------------------------
+_INDEX_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0705">
+<title>Proxy Checker · Control Panel</title>
+<style>
+:root{--bg:#0a0705;--card:#1a100a;--card2:#241610;--border:#3d261c;--acc:#fbbf24;--txt:#f5e6d8;--sub:#c5b3a8;--mut:#8d7a6f;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;}
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--txt);min-height:100vh;display:flex;justify-content:center;}
+.wrap{width:100%;max-width:520px;padding:16px 14px 80px;}
+h1{font-size:18px;font-weight:800;display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+h1 span{width:36px;height:36px;background:linear-gradient(135deg,var(--acc),#d97706);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.sub{color:var(--mut);font-size:12px;margin-bottom:16px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px;}
+.card h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--acc);margin-bottom:12px;}
+label{display:block;font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;}
+textarea,input,select{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:10px;color:var(--txt);font-size:14px;padding:11px 12px;outline:none;margin-bottom:12px;resize:vertical;font-family:monospace;}
+textarea:focus,input:focus{border-color:var(--acc);}
+button{background:linear-gradient(135deg,var(--acc),#d97706);border:none;border-radius:50px;padding:12px 20px;color:#000;font-size:14px;font-weight:800;cursor:pointer;width:100%;transition:transform .15s;}
+button:active{transform:scale(.97);}
+button:disabled{opacity:.5;cursor:not-allowed;}
+.btn2{background:var(--card2);border:1px solid var(--border);color:var(--txt);margin-top:8px;}
+.stats{display:flex;gap:10px;margin-bottom:14px;}
+.stat{flex:1;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;text-align:center;}
+.stat .n{font-size:22px;font-weight:900;}
+.stat .l{font-size:10px;color:var(--mut);text-transform:uppercase;margin-top:2px;}
+.stat.g .n{color:var(--green);} .stat.r .n{color:var(--red);} .stat.b .n{color:var(--blue);}
+.row{display:flex;gap:10px;} .row>*{flex:1;}
+.proxy{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;}
+.dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.dot.a{background:var(--green);} .dot.d{background:var(--red);} .dot.p{background:var(--acc);}
+.pinfo{flex:1;min-width:0;}
+.paddr{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pmeta{font-size:11px;color:var(--mut);margin-top:2px;}
+.progress{height:6px;background:var(--card2);border-radius:3px;overflow:hidden;margin-bottom:14px;}
+.progress .bar{height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--green));transition:width .3s;}
+.empty{text-align:center;color:var(--mut);padding:24px 0;font-size:13px;}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;}
+.badge.g{background:rgba(34,197,94,.15);color:var(--green);} .badge.r{background:rgba(239,68,68,.15);color:var(--red);}
+.grp{display:flex;align-items:center;gap:8px;margin-bottom:8px;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
+.grp .name{flex:1;font-weight:700;font-size:13px;}
+.grp .cnt{color:var(--mut);font-size:12px;}
+.grp button{width:auto;padding:6px 14px;font-size:12px;border-radius:20px;background:var(--card);border:1px solid var(--border);color:var(--txt);}
+.grp button.run{background:var(--acc);color:#000;border:none;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--border);border-radius:30px;padding:10px 18px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 30px rgba(0,0,0,.5);}
+.toast.show{display:block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span>\U0001f6e1\ufe0f</span> Proxy Checker</h1>
+  <div class="sub">Standalone service \u00b7 control panel</div>
+
+  <!-- Connect / API card -->
+  <div class="card">
+    <h2>\U0001f50c Connect this service</h2>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:10px;">
+      Use these to connect your main shop (Settings \u2192 \U0001f6e1 Proxy Checker) or any tool.
+    </div>
+    <label>API Key (auto-generated)</label>
+    <div class="row">
+      <input type="text" readonly id="apiKeyBox" style="flex:1;margin-bottom:0;" placeholder="loading\u2026">
+      <button style="width:auto;padding:11px 18px;" onclick="copyText('apiKeyBox','API key copied!')">Copy</button>
+    </div>
+    <div style="height:10px"></div>
+    <label>Base URL</label>
+    <div class="row">
+      <input type="text" readonly id="baseUrlBox" style="flex:1;margin-bottom:0;">
+      <button style="width:auto;padding:11px 18px;" onclick="copyText('baseUrlBox','Base URL copied!')">Copy</button>
+    </div>
+    <div style="height:10px"></div>
+    <label>API Endpoint (for your tools)</label>
+    <div class="row">
+      <input type="text" readonly id="endpointBox" style="flex:1;margin-bottom:0;">
+      <button style="width:auto;padding:11px 18px;" onclick="copyText('endpointBox','Endpoint copied!')">Copy</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat b"><div class="n" id="stTotal">0</div><div class="l">Total</div></div>
+    <div class="stat g"><div class="n" id="stLive">0</div><div class="l">Live</div></div>
+    <div class="stat r"><div class="n" id="stDead">0</div><div class="l">Dead</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Run Check</h2>
+    <label>Proxies (one per line)</label>
+    <textarea id="txtProxies" rows="7" placeholder="host:port:user:pass&#10;host:port"></textarea>
+    <div class="row">
+      <div><label>Timeout (s)</label><input type="number" id="txtTimeout" value="8" min="3" max="20"></div>
+      <div><label>Group name</label><input type="text" id="txtGroup" placeholder="e.g. 9Proxy"></div>
+    </div>
+    <div class="progress"><div class="bar" id="bar"></div></div>
+    <button id="btnRun" onclick="runCheck()">\u26a1 Run Check</button>
+  </div>
+
+  <div class="card">
+    <h2>Results</h2>
+    <div id="resultsBox"><div class="empty">Run a check to see results</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Saved Groups</h2>
+    <div id="groupsBox"></div>
+    <button class="btn2" onclick="loadGroups()">\u21bb Refresh Groups</button>
+  </div>
+
+  <div class="card">
+    <h2>API</h2>
+    <div style="font-size:12px;color:var(--sub);line-height:1.6;font-family:monospace;">
+      POST /api/check<br>
+      Header: <span style="color:var(--acc)">X-Api-Key: YOUR_KEY</span><br>
+      Body: <span style="color:var(--green)">{"proxies":["host:port"],"timeout":8}</span>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+let API_KEY='';
+let results=[],deadList=[];
+
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
+
+function copyText(id,msg){
+  const el=$(id);
+  if(!el||!el.value)return;
+  const val=el.value;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(val).then(()=>toast(msg));
+  }else{
+    el.select();el.setSelectionRange(0,99999);
+    try{document.execCommand('copy');toast(msg);}catch(e){}
+  }
+}
+
+async function call(path,method='GET',body=null){
+  const h={'Content-Type':'application/json'};
+  if(API_KEY)h['X-Api-Key']=API_KEY;
+  const o={method,headers:h};
+  if(body)o.body=JSON.stringify(body);
+  try{const r=await fetch(path,o);return await r.json();}
+  catch(e){toast('Connection error \u2014 check service URL');return{ok:false};}
+}
+
+async function loadIdentity(){
+  // auto-load the generated API key and show connection details
+  try{
+    const res=await fetch('/api/key');
+    const j=await res.json();
+    if(j.ok&&j.key){API_KEY=j.key;const kb=$('apiKeyBox');if(kb)kb.value=j.key;}
+  }catch(e){}
+  const origin=window.location.origin;
+  const base=$('baseUrlBox');if(base)base.value=origin;
+  const ep=$('endpointBox');if(ep)ep.value=origin+'/api/check';
+}
+
+async function runCheck(){
+  const lines=$('txtProxies').value.split('\\n').map(s=>s.trim()).filter(Boolean);
+  if(!lines.length)return toast('Paste some proxies first');
+  const timeout=parseInt($('txtTimeout').value)||8;
+  const grp=$('txtGroup').value.trim();
+  $('btnRun').disabled=true;$('btnRun').textContent='Checking\u2026';
+  $('bar').style.width='15%';
+  if(grp){await call('/api/groups/'+encodeURIComponent(grp),'POST',{proxies:lines});}
+  const res=await call('/api/check','POST',{proxies:lines,timeout});
+  $('btnRun').disabled=false;$('btnRun').textContent='\u26a1 Run Check';
+  if(!res.ok)return toast(res.error||'Check failed');
+  $('bar').style.width='100%';setTimeout(()=>$('bar').style.width='0',500);
+  $('stTotal').textContent=res.total||0;
+  $('stLive').textContent=res.live||0;
+  $('stDead').textContent=res.dead||0;
+  results=res.results||[];deadList=res.dead_list||[];
+  renderResults();
+  loadGroups();
+}
+
+function renderResults(){
+  const box=$('resultsBox');
+  if(!results.length && !deadList.length){box.innerHTML='<div class="empty">No live proxies found</div>';return;}
+  let h='';
+  results.forEach(p=>{
+    h+=`<div class="proxy"><span class="dot a"></span><div class="pinfo"><div class="paddr">${esc(p.proxy)}</div><div class="pmeta">${esc(p.ip||'')} \u00b7 ${esc(p.country||'')} \u00b7 ${p.ping_ms}ms \u00b7 ${esc(p.protocol||'')}</div></div><span class="badge g">LIVE</span></div>`;
+  });
+  deadList.slice(0,15).forEach(p=>{
+    h+=`<div class="proxy"><span class="dot d"></span><div class="pinfo"><div class="paddr">${esc(p)}</div></div><span class="badge r">DEAD</span></div>`;
+  });
+  if(deadList.length>15)h+=`<div class="empty">+${deadList.length-15} more dead</div>`;
+  box.innerHTML=h;
+}
+
+async function loadGroups(){
+  const res=await call('/api/groups');
+  const box=$('groupsBox');
+  const groups=(res.groups||{});
+  const keys=Object.keys(groups);
+  if(!keys.length){box.innerHTML='<div class="empty">No saved groups</div>';return;}
+  box.innerHTML=keys.map(k=>`<div class="grp"><span class="name">${esc(k)}</span><span class="cnt">${groups[k].length} proxies</span><button class="run" onclick="runGroup('${esc(k)}')">Run</button><button onclick="delGroup('${esc(k)}')">Del</button></div>`).join('');
+}
+
+async function runGroup(name){
+  const res=await call('/api/groups');
+  const proxies=(res.groups||{})[name]||[];
+  if(!proxies.length)return toast('Group is empty');
+  $('txtProxies').value=proxies.join('\\n');
+  $('txtGroup').value=name;
+  $('stTotal').textContent=proxies.length;
+  toast('Group loaded \u2014 press Run Check');
+}
+async function delGroup(name){
+  await call('/api/groups/'+encodeURIComponent(name),'DELETE');
+  loadGroups();toast('Group deleted');
+}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+loadIdentity().then(loadGroups);
+</script>
+</body>
+</html>"""
+
+
 @app.route("/")
 def index():
-    return send_from_directory(app.static_folder, "index.html")
+    _static_index = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html")
+    if os.path.isfile(_static_index):
+        return send_from_directory(os.path.dirname(_static_index), "index.html")
+    return _INDEX_HTML
 
 
 # ---------------------------------------------------------------
