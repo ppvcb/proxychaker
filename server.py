@@ -45,6 +45,25 @@ from flask import Flask, jsonify, request, send_from_directory
 # show a ready-to-copy key with zero setup from the user.
 API_KEY = os.environ.get("PROXY_API_KEY", "").strip()
 _IDENTITY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "api_key.txt")
+
+
+def _load_api_key():
+    """Return the effective API key.
+
+    Reads env first; otherwise re-reads the persisted file on every call so
+    that even in a multi-worker context all workers converge on the SAME key
+    (the file is written once at first boot). Falls back to the in-memory
+    value if the file is unavailable.
+    """
+    if API_KEY:
+        return API_KEY
+    try:
+        with open(_IDENTITY_FILE, encoding="utf-8") as _fh:
+            return _fh.read().strip()
+    except Exception:
+        return API_KEY
+
+
 if not API_KEY:
     try:
         with open(_IDENTITY_FILE, encoding="utf-8") as _fh:
@@ -380,7 +399,8 @@ def bulk_check(proxy_list, timeout=8, max_workers=10):
 # Auth
 # ---------------------------------------------------------------
 def key_ok():
-    if not API_KEY:
+    expected = _load_api_key()
+    if not expected:
         return True
     supplied = (request.headers.get("X-Api-Key") or "").strip()
     if not supplied:
@@ -389,7 +409,7 @@ def key_ok():
             supplied = auth_header[7:].strip()
     if not supplied:
         return False
-    return hmac.compare_digest(supplied, API_KEY)
+    return hmac.compare_digest(supplied, expected)
 
 
 def require_key(f):
@@ -672,7 +692,33 @@ def health():
 @app.route("/api/key")
 def get_key():
     """Return the current API key (for the control panel's copy box)."""
-    return jsonify({"ok": True, "key": API_KEY})
+    return jsonify({"ok": True, "key": _load_api_key()})
+
+
+@app.route("/api/key/generate", methods=["POST"])
+def generate_key():
+    """Generate a fresh API key and persist it.
+
+    If PROXY_API_KEY env var is set, that value wins and cannot be overridden
+    here — we let the caller know. Otherwise we write a new random key to the
+    identity file and return it, so the control panel can show & copy it.
+    """
+    if os.environ.get("PROXY_API_KEY", "").strip():
+        return jsonify({
+            "ok": False,
+            "error": "API key is set via the PROXY_API_KEY environment variable. "
+                     "Edit that variable in Railway Settings to change it.",
+        }), 400
+    new_key = secrets.token_hex(16)
+    try:
+        os.makedirs(os.path.dirname(_IDENTITY_FILE), exist_ok=True)
+        with open(_IDENTITY_FILE, "w", encoding="utf-8") as _fh:
+            _fh.write(new_key)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": f"Could not save key: {exc}"}), 500
+    global API_KEY
+    API_KEY = new_key
+    return jsonify({"ok": True, "key": new_key})
 
 
 @app.route("/api/check", methods=["POST"])

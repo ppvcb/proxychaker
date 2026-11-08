@@ -8,4 +8,4 @@ COPY server.py .
 RUN mkdir -p static data
 ENV PORT=8080
 EXPOSE 8080
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "8", "--timeout", "120", "server:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "16", "--timeout", "120", "server:app"]
