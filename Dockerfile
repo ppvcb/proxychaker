@@ -3,9 +3,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY server.py .
-# The control-panel HTML is embedded in server.py (self-contained build).
-# static/ and data/ directories are created at runtime; no external file copy needed.
-RUN mkdir -p static data
+# Control-panel HTML — must be copied so Railway serves the latest UI
+# (the Generate button, key display, copy buttons etc.).
+COPY static/ ./static/
+# data/ is created at runtime (api_key, proxies.json)
+RUN mkdir -p data
+# PORT is injected by Railway; default to 8080 for plain Docker use.
 ENV PORT=8080
 EXPOSE 8080
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "16", "--timeout", "120", "server:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 1 --threads 16 --timeout 120 server:app"]

@@ -39,45 +39,49 @@ from flask import Flask, jsonify, request, send_from_directory
 # ---------------------------------------------------------------
 # Config (env vars / Railway variables)
 # ---------------------------------------------------------------
-# API key resolution order: env PROXY_API_KEY → persisted auto-generated key.
-# If neither exists, one is generated on first start and stored in
-# data/api_key.txt so it survives restarts. This lets the control panel
-# show a ready-to-copy key with zero setup from the user.
-API_KEY = os.environ.get("PROXY_API_KEY", "").strip()
+# ENV_API_KEY: set PROXY_API_KEY in Railway Variables to pin a permanent key.
+# If not set, a key is auto-generated on first start and stored in
+# data/api_key.txt so it survives container restarts.
+# _load_api_key() always re-reads the file when env is empty, so even a
+# hypothetical multi-worker deployment converges on the single file value.
+_ENV_API_KEY = os.environ.get("PROXY_API_KEY", "").strip()
 _IDENTITY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "api_key.txt")
 
+# In-memory fallback only used if the file cannot be read at all.
+_FALLBACK_API_KEY = ""
 
-def _load_api_key():
-    """Return the effective API key.
 
-    Reads env first; otherwise re-reads the persisted file on every call so
-    that even in a multi-worker context all workers converge on the SAME key
-    (the file is written once at first boot). Falls back to the in-memory
-    value if the file is unavailable.
+def _load_api_key() -> str:
+    """Return the effective API key, always fresh.
+
+    Priority: env var > persisted file > in-memory fallback.
+    Always re-reads the file (when env is empty) so every worker/request
+    sees the latest value written by /api/key/generate.
     """
-    if API_KEY:
-        return API_KEY
+    if _ENV_API_KEY:
+        return _ENV_API_KEY
     try:
         with open(_IDENTITY_FILE, encoding="utf-8") as _fh:
             return _fh.read().strip()
     except Exception:
-        return API_KEY
+        return _FALLBACK_API_KEY
 
 
-if not API_KEY:
+# Bootstrap: create a key file if none exists yet.
+if not _ENV_API_KEY:
     try:
         with open(_IDENTITY_FILE, encoding="utf-8") as _fh:
-            API_KEY = _fh.read().strip()
+            _FALLBACK_API_KEY = _fh.read().strip()
     except Exception:
-        API_KEY = ""
-if not API_KEY:
-    API_KEY = secrets.token_hex(16)
-    try:
-        os.makedirs(os.path.dirname(_IDENTITY_FILE), exist_ok=True)
-        with open(_IDENTITY_FILE, "w", encoding="utf-8") as _fh:
-            _fh.write(API_KEY)
-    except Exception:
-        pass
+        _FALLBACK_API_KEY = ""
+    if not _FALLBACK_API_KEY:
+        _FALLBACK_API_KEY = secrets.token_hex(16)
+        try:
+            os.makedirs(os.path.dirname(_IDENTITY_FILE), exist_ok=True)
+            with open(_IDENTITY_FILE, "w", encoding="utf-8") as _fh:
+                _fh.write(_FALLBACK_API_KEY)
+        except Exception:
+            pass
 
 PORT = int(os.environ.get("PORT", "8080"))
 
@@ -686,7 +690,7 @@ def index():
 # ---------------------------------------------------------------
 @app.route("/api/health")
 def health():
-    return jsonify({"ok": True, "service": "proxy-checker", "api_key_set": bool(API_KEY)})
+    return jsonify({"ok": True, "service": "proxy-checker", "api_key_set": bool(_load_api_key())})
 
 
 @app.route("/api/key")
@@ -699,15 +703,14 @@ def get_key():
 def generate_key():
     """Generate a fresh API key and persist it.
 
-    If PROXY_API_KEY env var is set, that value wins and cannot be overridden
-    here — we let the caller know. Otherwise we write a new random key to the
-    identity file and return it, so the control panel can show & copy it.
+    Blocked if the key is set via the PROXY_API_KEY environment variable —
+    edit that variable in Railway Settings instead.
     """
-    if os.environ.get("PROXY_API_KEY", "").strip():
+    if _ENV_API_KEY:
         return jsonify({
             "ok": False,
             "error": "API key is set via the PROXY_API_KEY environment variable. "
-                     "Edit that variable in Railway Settings to change it.",
+                     "Edit that variable in Railway → Variables to change it.",
         }), 400
     new_key = secrets.token_hex(16)
     try:
@@ -716,8 +719,8 @@ def generate_key():
             _fh.write(new_key)
     except Exception as exc:
         return jsonify({"ok": False, "error": f"Could not save key: {exc}"}), 500
-    global API_KEY
-    API_KEY = new_key
+    global _FALLBACK_API_KEY
+    _FALLBACK_API_KEY = new_key   # update in-memory fallback for this worker
     return jsonify({"ok": True, "key": new_key})
 
 
