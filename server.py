@@ -516,7 +516,7 @@ button:disabled{opacity:.5;cursor:not-allowed;}
     </div>
     <label>API Key (auto-generated)</label>
     <div class="row">
-      <input type="text" readonly id="apiKeyBox" style="flex:1;margin-bottom:0;" placeholder="loading…">
+      <input type="text" readonly id="apiKeyBox" style="flex:1;margin-bottom:0;" placeholder="loading...">
       <button style="width:auto;padding:11px 18px;" onclick="copyText('apiKeyBox','API key copied!')">Copy</button>
       <button style="width:auto;padding:11px 18px;background:var(--card2);border:1px solid var(--border);color:var(--txt);" onclick="generateApiKey()">Generate</button>
     </div>
@@ -604,15 +604,37 @@ async function call(path,method='GET',body=null){
 }
 
 async function loadIdentity(){
-  // auto-load the generated API key and show connection details
-  try{
-    const res=await fetch('/api/key');
-    const j=await res.json();
-    if(j.ok&&j.key){API_KEY=j.key;const kb=$('apiKeyBox');if(kb)kb.value=j.key;}
-  }catch(e){}
-  const origin=window.location.origin;
-  const base=$('baseUrlBox');if(base)base.value=origin;
-  const ep=$('endpointBox');if(ep)ep.value=origin+'/api/check';
+  // Fill base URL and endpoint immediately — these don't need a network call
+  const origin = window.location.origin;
+  const base = $('baseUrlBox');
+  if(base) base.value = origin;
+  const ep = $('endpointBox');
+  if(ep) ep.value = origin + '/api/check';
+
+  // Load API key from the server
+  const kb = $('apiKeyBox');
+  if(kb) kb.value = 'Loading...';
+  try {
+    const res = await fetch('/api/key');
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    if(j.ok && j.key) {
+      API_KEY = j.key;
+      if(kb) kb.value = j.key;
+    } else {
+      if(kb) kb.value = 'Error loading key';
+    }
+  } catch(e) {
+    if(kb) kb.value = 'Error: ' + e.message;
+    // Retry once after 2 seconds
+    setTimeout(async function() {
+      try {
+        const r2 = await fetch('/api/key');
+        const j2 = await r2.json();
+        if(j2.ok && j2.key) { API_KEY = j2.key; if(kb) kb.value = j2.key; }
+      } catch(_) {}
+    }, 2000);
+  }
 }
 
 async function generateApiKey(){
