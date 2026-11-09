@@ -505,20 +505,22 @@ button:disabled{opacity:.5;cursor:not-allowed;}
 </head>
 <body>
 <div class="wrap">
-  <h1><span>\U0001f6e1\ufe0f</span> Proxy Checker</h1>
-  <div class="sub">Standalone service \u00b7 control panel</div>
+  <h1><span>🛡️</span> Proxy Checker</h1>
+  <div class="sub">Standalone service · control panel</div>
 
   <!-- Connect / API card -->
   <div class="card">
-    <h2>\U0001f50c Connect this service</h2>
+    <h2>🔌 Connect this service</h2>
     <div style="font-size:12px;color:var(--sub);margin-bottom:10px;">
-      Use these to connect your main shop (Settings \u2192 \U0001f6e1 Proxy Checker) or any tool.
+      Use these to connect your main shop (Settings → 🛡️ Proxy Checker) or any tool.
     </div>
     <label>API Key (auto-generated)</label>
     <div class="row">
-      <input type="text" readonly id="apiKeyBox" style="flex:1;margin-bottom:0;" placeholder="loading\u2026">
+      <input type="text" readonly id="apiKeyBox" style="flex:1;margin-bottom:0;" placeholder="loading…">
       <button style="width:auto;padding:11px 18px;" onclick="copyText('apiKeyBox','API key copied!')">Copy</button>
+      <button style="width:auto;padding:11px 18px;background:var(--card2);border:1px solid var(--border);color:var(--txt);" onclick="generateApiKey()">Generate</button>
     </div>
+    <div id="keyMsg" style="font-size:11px;color:var(--mut);margin-top:6px;"></div>
     <div style="height:10px"></div>
     <label>Base URL</label>
     <div class="row">
@@ -548,7 +550,7 @@ button:disabled{opacity:.5;cursor:not-allowed;}
       <div><label>Group name</label><input type="text" id="txtGroup" placeholder="e.g. 9Proxy"></div>
     </div>
     <div class="progress"><div class="bar" id="bar"></div></div>
-    <button id="btnRun" onclick="runCheck()">\u26a1 Run Check</button>
+    <button id="btnRun" onclick="runCheck()">⚡ Run Check</button>
   </div>
 
   <div class="card">
@@ -559,7 +561,7 @@ button:disabled{opacity:.5;cursor:not-allowed;}
   <div class="card">
     <h2>Saved Groups</h2>
     <div id="groupsBox"></div>
-    <button class="btn2" onclick="loadGroups()">\u21bb Refresh Groups</button>
+    <button class="btn2" onclick="loadGroups()">↻ Refresh Groups</button>
   </div>
 
   <div class="card">
@@ -598,7 +600,7 @@ async function call(path,method='GET',body=null){
   const o={method,headers:h};
   if(body)o.body=JSON.stringify(body);
   try{const r=await fetch(path,o);return await r.json();}
-  catch(e){toast('Connection error \u2014 check service URL');return{ok:false};}
+  catch(e){toast('Connection error — check service URL');return{ok:false};}
 }
 
 async function loadIdentity(){
@@ -613,16 +615,34 @@ async function loadIdentity(){
   const ep=$('endpointBox');if(ep)ep.value=origin+'/api/check';
 }
 
+async function generateApiKey(){
+  const msg=$('keyMsg');
+  try{
+    const res=await fetch('/api/key/generate',{method:'POST'});
+    const j=await res.json();
+    if(j.ok&&j.key){
+      API_KEY=j.key;
+      const kb=$('apiKeyBox');if(kb)kb.value=j.key;
+      if(msg){msg.textContent='✅ New API key generated — copy it & set it in your shop Settings.';msg.style.color='#22c55e';}
+      copyText('apiKeyBox','New API key copied!');
+    }else{
+      if(msg){msg.textContent=j.error||'Could not generate key.';msg.style.color='#ef4444';}
+    }
+  }catch(e){
+    if(msg){msg.textContent='Error generating key.';msg.style.color='#ef4444';}
+  }
+}
+
 async function runCheck(){
-  const lines=$('txtProxies').value.split('\\n').map(s=>s.trim()).filter(Boolean);
+  const lines=$('txtProxies').value.split('\n').map(s=>s.trim()).filter(Boolean);
   if(!lines.length)return toast('Paste some proxies first');
   const timeout=parseInt($('txtTimeout').value)||8;
   const grp=$('txtGroup').value.trim();
-  $('btnRun').disabled=true;$('btnRun').textContent='Checking\u2026';
+  $('btnRun').disabled=true;$('btnRun').textContent='Checking…';
   $('bar').style.width='15%';
   if(grp){await call('/api/groups/'+encodeURIComponent(grp),'POST',{proxies:lines});}
   const res=await call('/api/check','POST',{proxies:lines,timeout});
-  $('btnRun').disabled=false;$('btnRun').textContent='\u26a1 Run Check';
+  $('btnRun').disabled=false;$('btnRun').textContent='⚡ Run Check';
   if(!res.ok)return toast(res.error||'Check failed');
   $('bar').style.width='100%';setTimeout(()=>$('bar').style.width='0',500);
   $('stTotal').textContent=res.total||0;
@@ -638,7 +658,7 @@ function renderResults(){
   if(!results.length && !deadList.length){box.innerHTML='<div class="empty">No live proxies found</div>';return;}
   let h='';
   results.forEach(p=>{
-    h+=`<div class="proxy"><span class="dot a"></span><div class="pinfo"><div class="paddr">${esc(p.proxy)}</div><div class="pmeta">${esc(p.ip||'')} \u00b7 ${esc(p.country||'')} \u00b7 ${p.ping_ms}ms \u00b7 ${esc(p.protocol||'')}</div></div><span class="badge g">LIVE</span></div>`;
+    h+=`<div class="proxy"><span class="dot a"></span><div class="pinfo"><div class="paddr">${esc(p.proxy)}</div><div class="pmeta">${esc(p.ip||'')} · ${esc(p.country||'')} · ${p.ping_ms}ms · ${esc(p.protocol||'')}</div></div><span class="badge g">LIVE</span></div>`;
   });
   deadList.slice(0,15).forEach(p=>{
     h+=`<div class="proxy"><span class="dot d"></span><div class="pinfo"><div class="paddr">${esc(p)}</div></div><span class="badge r">DEAD</span></div>`;
@@ -660,10 +680,10 @@ async function runGroup(name){
   const res=await call('/api/groups');
   const proxies=(res.groups||{})[name]||[];
   if(!proxies.length)return toast('Group is empty');
-  $('txtProxies').value=proxies.join('\\n');
+  $('txtProxies').value=proxies.join('\n');
   $('txtGroup').value=name;
   $('stTotal').textContent=proxies.length;
-  toast('Group loaded \u2014 press Run Check');
+  toast('Group loaded — press Run Check');
 }
 async function delGroup(name){
   await call('/api/groups/'+encodeURIComponent(name),'DELETE');
@@ -674,7 +694,8 @@ function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'
 loadIdentity().then(loadGroups);
 </script>
 </body>
-</html>"""
+</html>
+"""
 
 
 @app.route("/")
