@@ -730,6 +730,15 @@ loadIdentity().then(loadGroups);
 """
 
 
+@app.after_request
+def _no_cache(resp):
+    """Disable caching so the control panel & keys are always fresh."""
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
+
 @app.route("/")
 def index():
     _static_index = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html")
