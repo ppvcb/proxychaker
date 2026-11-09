@@ -47,41 +47,48 @@ from flask import Flask, jsonify, request, send_from_directory
 _ENV_API_KEY = os.environ.get("PROXY_API_KEY", "").strip()
 _IDENTITY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "api_key.txt")
 
-# In-memory fallback only used if the file cannot be read at all.
+# In-memory key — always set, never empty.
+# Priority: env var > file > newly generated.
 _FALLBACK_API_KEY = ""
 
 
 def _load_api_key() -> str:
-    """Return the effective API key, always fresh.
+    """Return the effective API key — always non-empty.
 
-    Priority: env var > persisted file > in-memory fallback.
-    Always re-reads the file (when env is empty) so every worker/request
-    sees the latest value written by /api/key/generate.
+    Priority: PROXY_API_KEY env var > data/api_key.txt > in-memory fallback.
+    Re-reads the file each call so /api/key/generate propagates instantly.
     """
     if _ENV_API_KEY:
         return _ENV_API_KEY
     try:
-        with open(_IDENTITY_FILE, encoding="utf-8") as _fh:
-            return _fh.read().strip()
+        v = open(_IDENTITY_FILE, encoding="utf-8").read().strip()
+        if v:
+            return v
     except Exception:
-        return _FALLBACK_API_KEY
+        pass
+    return _FALLBACK_API_KEY
 
 
-# Bootstrap: create a key file if none exists yet.
+# Bootstrap — ensure _FALLBACK_API_KEY is always set on startup.
 if not _ENV_API_KEY:
+    _loaded = ""
     try:
-        with open(_IDENTITY_FILE, encoding="utf-8") as _fh:
-            _FALLBACK_API_KEY = _fh.read().strip()
+        _loaded = open(_IDENTITY_FILE, encoding="utf-8").read().strip()
     except Exception:
-        _FALLBACK_API_KEY = ""
-    if not _FALLBACK_API_KEY:
+        pass
+    if _loaded:
+        _FALLBACK_API_KEY = _loaded
+    else:
+        # Generate a fresh key and try to persist it.
         _FALLBACK_API_KEY = secrets.token_hex(16)
         try:
             os.makedirs(os.path.dirname(_IDENTITY_FILE), exist_ok=True)
             with open(_IDENTITY_FILE, "w", encoding="utf-8") as _fh:
                 _fh.write(_FALLBACK_API_KEY)
         except Exception:
-            pass
+            pass  # Filesystem may be read-only (Railway); key still works in-memory.
+else:
+    _FALLBACK_API_KEY = _ENV_API_KEY
 
 PORT = int(os.environ.get("PORT", "8080"))
 
@@ -521,6 +528,9 @@ button:disabled{opacity:.5;cursor:not-allowed;}
       <button style="width:auto;padding:11px 18px;background:var(--card2);border:1px solid var(--border);color:var(--txt);" onclick="generateApiKey()">Generate</button>
     </div>
     <div id="keyMsg" style="font-size:11px;color:var(--mut);margin-top:6px;"></div>
+    <div style="font-size:11px;color:var(--sub);margin-top:4px;padding:8px 10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);border-radius:8px;">
+      💡 To keep this key permanent across deploys: set <strong>PROXY_API_KEY</strong> = this value in Railway → Variables.
+    </div>
     <div style="height:10px"></div>
     <label>Base URL</label>
     <div class="row">
@@ -738,8 +748,15 @@ def health():
 
 @app.route("/api/key")
 def get_key():
-    """Return the current API key (for the control panel's copy box)."""
-    return jsonify({"ok": True, "key": _load_api_key()})
+    """Return the current API key. Never returns an empty key."""
+    key = _load_api_key()
+    if not key:
+        # Last resort: generate and store in-memory
+        import secrets as _s
+        key = _s.token_hex(16)
+        global _FALLBACK_API_KEY
+        _FALLBACK_API_KEY = key
+    return jsonify({"ok": True, "key": key})
 
 
 @app.route("/api/key/generate", methods=["POST"])
