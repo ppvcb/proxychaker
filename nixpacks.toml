@@ -1,0 +1,41 @@
+# nixpacks.toml — Railway build configuration
+
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = [
+  'nodejs',
+  'gcc',
+  'gnumake',
+  'pkg-config',
+  'openssl',
+  'libffi',
+  'zlib',
+  'libjpeg',
+  'libpng',
+  'freetype',
+  'libxml2',
+  'libxslt',
+  'ffmpeg',
+  'bash',
+  'curl',
+  'wget',
+  'git',
+]
+aptPkgs = [
+  'python3',
+  'python3-pip',
+  'python3-venv',
+  'python3-dev',
+]
+
+[phases.install]
+cmds = [
+  'npm install',
+  # ভারী C-extension ভিত্তিক প্যাকেজগুলো (যেমন grpcio, numpy, pandas) বিল্ড টাইমে কম্পাইল করতে গেলে Railway-তে মেমোরি ফেইল বা ওওএম (OOM) হয়।
+  # তাই বিল্ড টাইমে শুধুমাত্র লাইটওয়েট এবং কমন লাইব্রেরি ইনস্টল করব। বাকি সব বট রানটাইমে অটো-ডিটেক্ট হয়ে আমাদের ডাইনামিক ইনস্টলারের মাধ্যমে ইনস্টল হবে।
+  'pip3 install --prefer-binary --quiet requests python-telegram-bot pyTelegramBotAPI aiohttp || python3 -m pip install --prefer-binary --quiet requests python-telegram-bot pyTelegramBotAPI aiohttp || true'
+]
+
+[start]
+cmd = 'node server.js'

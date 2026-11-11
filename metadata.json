@@ -1,0 +1,6 @@
+{
+  "name": "Bot Hosting Panel",
+  "description": "Multi-user bot/script hosting panel with web UI & REST API.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
